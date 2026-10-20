@@ -1,57 +1,62 @@
 # Arquitetura proposta — ERP SaaS
 
-**Status:** rascunho inicial, sujeito à aprovação do responsável pelo projeto.
+**Status:** rascunho; escolhas pendentes de aprovação técnica. Nenhuma implementação autorizada.
 
 ## Objetivo
-Definir uma base evolutiva para um ERP SaaS multiempresa, com isolamento de dados, regras de negócio testáveis e revisão humana das alterações.
+Definir uma base evolutiva para um ERP SaaS multiempresa, com isolamento de dados, regras de negócio testáveis e revisão humana.
 
-## Tecnologias propostas
-- Backend: C# / ASP.NET Core (.NET 8 ou superior).
-- Banco: PostgreSQL.
-- ORM e migrations: Entity Framework Core.
-- Frontend: Flutter para Web e Desktop.
-- Versionamento e revisão: GitHub, branches de trabalho e pull requests.
+## Stack proposta
+- C# / ASP.NET Core (.NET 8 ou superior; versão exata a decidir).
+- PostgreSQL, Entity Framework Core e migrations revisadas.
+- Flutter Web/Desktop.
+- GitHub, branches por tarefa e pull requests.
 
-Estas escolhas são propostas iniciais; a implementação ainda não foi iniciada.
+## Projetos e direção de dependências
+- **ERP.Domain:** entidades, objetos de valor e invariantes; não referencia Application, Infrastructure ou Api.
+- **ERP.Application:** casos de uso, DTOs, contratos/portas e validações; referencia Domain, não Infrastructure.
+- **ERP.Infrastructure:** implementa contratos da Application, persistência EF Core e integrações; referencia Application/Domain.
+- **ERP.Api:** endpoints, autenticação, autorização e composição de dependências; referencia Application e Infrastructure na composição.
+- **Frontend:** consome contratos HTTP versionados; não acessa diretamente o banco.
 
-## Camadas propostas
-- **ERP.Domain:** entidades, invariantes, regras e contratos de domínio sem dependências de infraestrutura.
-- **ERP.Application:** casos de uso, validações, DTOs e interfaces de serviços.
-- **ERP.Infrastructure:** persistência, EF Core, integrações e implementação de interfaces.
-- **ERP.Api:** endpoints HTTP, autenticação, autorização e composição de dependências.
-- **Frontend:** cliente Flutter consumindo contratos versionados da API.
+As regras de negócio devem ficar no Domain/Application, nunca em controllers ou widgets. Dependências externas são substituíveis por interfaces nas camadas internas.
 
-Fluxo esperado de dependências: Api e Infrastructure dependem de Application/Domain conforme necessário; Domain não depende das demais camadas.
+## Identidade e autorização (pendente: ADR-005)
+- Distinguir administrador da plataforma, administrador da empresa e usuários de cada empresa.
+- Autenticar a identidade e validar autorização por operação no backend; ocultar botões no frontend não é controle de acesso.
+- Definir associação usuário-empresa, seleção de empresa ativa e políticas de acesso antes de implementar endpoints.
+- Negar por padrão operações sem permissão; auditar operações críticas.
+- Avaliar ASP.NET Core Identity e provedores OIDC sem decidir prematuramente.
 
-## Multiempresa
-- Definir uma estratégia de tenant antes de criar tabelas.
-- Toda operação com dados empresariais deve validar contexto da empresa e permissões.
-- Índices únicos e consultas devem considerar o escopo do tenant quando aplicável.
-- Testar acesso cruzado entre empresas e impedir vazamento de dados.
-- Nunca confiar somente no identificador de empresa enviado pelo frontend.
+## Multiempresa (pendente: ADR-003)
+Alternativas: banco por empresa, schema por empresa ou tabelas compartilhadas com tenant_id e controles complementares. A decisão deve considerar custo, escala, migrações, backup, isolamento e operação.
+
+Requisitos independentes da alternativa:
+- O tenant deve ser derivado de contexto autenticado/autorizado no servidor; não confiar apenas no EmpresaId recebido do cliente.
+- Escopo de empresa obrigatório em consultas, gravações e índices únicos pertinentes.
+- Validar a associação do usuário ao tenant e evitar acesso cruzado por IDs manipulados.
+- Testar leituras, escritas, exportações, relatórios, jobs e operações administrativas entre tenants.
+- Considerar controles adicionais no PostgreSQL, como Row-Level Security, após avaliar sua adequação; não substituir testes de autorização.
 
 ## Módulos candidatos (ordem ainda não aprovada)
-1. Empresas e identidade.
-2. Papéis, permissões e usuários.
-3. Pessoas: clientes, fornecedores, colaboradores e vendedores.
-4. Produtos e estoque.
-5. Caixa, vendas e pagamentos.
-6. Contas a receber e a pagar.
-7. Relatórios e auditoria.
+1. Empresas, identidade, papéis e permissões.
+2. Pessoas: clientes, fornecedores, colaboradores e vendedores.
+3. Produtos e estoque.
+4. Vendas, pagamentos e caixa.
+5. Contas a receber e a pagar.
+6. Relatórios e auditoria.
 
-## Princípios de implementação
-- Transações consistentes em vendas, estoque e financeiro.
-- Cancelamentos e estornos com trilha de auditoria.
-- Migrations revisadas, testadas e executadas somente com autorização.
-- Testes unitários e de integração antes do merge.
-- Segredos fora do repositório; privilégios mínimos por ambiente.
-- Alterações propostas em branches separadas, sem merge automático.
+## Integridade e operação
+- Usar transações consistentes nas operações de estoque, venda e financeiro.
+- Cancelamentos devem registrar reversões/estornos rastreáveis; não apagar histórico financeiro indiscriminadamente.
+- Segredos fora do repositório; privilégios mínimos, backups e restauração testada.
+- Testes unitários, integração, autorização e isolamento multiempresa antes de merge.
+- Migrations e deploys exigem revisão e autorização separadas.
 
-## Pendências arquiteturais
-- Confirmar estratégia de autenticação e autorização.
-- Escolher modelo de isolamento multiempresa.
-- Definir requisitos de emissão fiscal, integração com pagamentos e auditoria.
-- Definir estratégia de deploy, observabilidade, backup e recuperação.
-- Validar requisitos não funcionais e volume esperado de usuários.
+## Questões em aberto
+- Estratégia de tenant (ADR-003) e autenticação (ADR-005).
+- MVP e primeira jornada ponta a ponta.
+- Requisitos fiscais, emissão de documentos e integrações.
+- Escala, disponibilidade, observabilidade, hospedagem e recuperação.
+- Política de versionamento de API e compatibilidade com clientes Flutter.
 
-Nenhuma destas pendências deve ser tratada como decisão tomada.
+As propostas acima não são decisões finais nem autorização para criar código.
